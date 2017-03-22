@@ -30,7 +30,13 @@ LDFLAGS += `xml2-config --libs`
 
 H2MFLAGS = --help-option "-h" --version-option "-v" --no-discard-stderr --no-info
 
+ifeq (MINGW32_NT-6.2, $(PLATTFORM))
+TARGET = siitool.exe
+CFLAGS += -mconsole
+else
 TARGET = siitool
+endif
+
 OBJECTS = main.o sii.o esi.o esifile.o crc8.o
 
 PREFIX = /usr/local/bin
@@ -46,7 +52,8 @@ VERSION = `scripts/getversion`
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-all: $(TARGET) $(TARGET).1
+#all: $(TARGET) $(TARGET).1
+all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
 	$(LD) -o $@ $^ $(LDFLAGS)

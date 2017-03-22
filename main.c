@@ -170,7 +170,7 @@ static int read_input(FILE *f, unsigned char *buffer, size_t size)
 		buffer[count++] = (unsigned char)(input&0xff);
 
 	if (count>size)
-		fprintf(stderr, "Error: read size is larger than expected (bytes read: %zu)\n", count);
+		fprintf(stderr, "Error: read size is larger than expected (bytes read: %d)\n", count);
 
 	return count;
 }
@@ -275,7 +275,11 @@ int main(int argc, char *argv[])
 	if (filename == NULL)
 		read_input(stdin, eeprom, MAX_BUFFER_SIZE);
 	else {
+#ifdef __MINGW32_VERSION
+		f = fopen(filename, "rb");
+#else
 		f = fopen(filename, "r");
+#endif
 		if (f == NULL) {
 			perror("Error open input file");
 			ret = -1;

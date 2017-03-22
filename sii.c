@@ -239,7 +239,7 @@ static struct _sii_strings *parse_string_section(const unsigned char *buffer, si
 
 static void parse_datatype_section(const unsigned char *buffer, size_t size)
 {
-	printf("\n+++ parsing of datatype section not yet implemented (first byte: 0x%.2x, size: %zu)\n",
+	printf("\n+++ parsing of datatype section not yet implemented (first byte: 0x%.2x, size: %d)\n",
 			*buffer, size);
 }
 
@@ -705,6 +705,9 @@ static int parse_content(struct _sii *sii, const unsigned char *eeprom, size_t m
 	while (1) {
 		switch (section) {
 		case SII_CAT_NOP:
+			buffer+=secsize;
+			section = get_next_section(buffer, &secsize);
+			buffer+=4;
 			break;
 
 		case SII_PREAMBLE:

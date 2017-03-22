@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -2128,7 +2127,11 @@ int sii_write_bin(SiiInfo *sii, const char *outfile)
 			fprintf(stderr, "Warning, existing file %s is overwritten\n", outfile);
 		}
 
+#ifdef _WIN32
+		fh = fopen(outfile, "wb");
+#else
 		fh = fopen(outfile, "w");
+#endif
 		if (fh == NULL) {
 			fprintf(stderr, "Error open file '%s' for writing\n", outfile);
 			return -2;

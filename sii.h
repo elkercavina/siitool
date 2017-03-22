@@ -6,7 +6,11 @@
 #ifndef SII_H
 #define SII_H
 
-#include <unistd.h>
+#ifndef _MSC_VER
+	#include <unistd.h>
+	#define __func__ __FUNCTION__
+#endif
+
 #include <stdint.h>
 
 #define SII_VERSION_MAJOR  0

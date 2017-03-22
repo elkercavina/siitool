@@ -233,7 +233,7 @@ static int parse_sii_input(const unsigned char *buffer, const char *output)
 int main(int argc, char *argv[])
 {
 	FILE *f;
-	unsigned char eeprom[MAX_BUFFER_SIZE];
+	unsigned char* eeprom=malloc(MAX_BUFFER_SIZE);
 	char *filename = NULL;
 	char *output = NULL;
 	int ret = -1;

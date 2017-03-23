@@ -6,9 +6,10 @@
 #ifndef SII_H
 #define SII_H
 
-#ifndef _MSC_VER
-	#include <unistd.h>
+#ifdef _MSC_VER
 	#define __func__ __FUNCTION__
+#else
+	#include <unistd.h>
 #endif
 
 #include <stdint.h>

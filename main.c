@@ -275,7 +275,7 @@ int main(int argc, char *argv[])
 	if (filename == NULL)
 		read_input(stdin, eeprom, MAX_BUFFER_SIZE);
 	else {
-#ifdef __MINGW32_VERSION
+#ifdef _WIN32
 		f = fopen(filename, "rb");
 #else
 		f = fopen(filename, "r");

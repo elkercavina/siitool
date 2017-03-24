@@ -55,12 +55,12 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>..\Include</AdditionalIncludeDirectories>
       <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -72,25 +72,25 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>..\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\crc8.h" />
     <ClInclude Include="..\esi.h" />
     <ClInclude Include="..\esifile.h" />
-    <ClInclude Include="..\iconv.h" />
     <ClInclude Include="..\sii.h" />
-    <ClInclude Include="..\targetver.h" />
-    <ClInclude Include="..\zconf.h" />
-    <ClInclude Include="..\zlib.h" />
+    <ClInclude Include="..\Include\iconv.h" />
+    <ClInclude Include="..\Include\zconf.h" />
+    <ClInclude Include="..\Include\zlib.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\crc8.c" />
@@ -100,9 +100,7 @@
     <ClCompile Include="..\sii.c" />
   </ItemGroup>
   <ItemGroup>
-    <Library Include="..\Lib\iconv.lib" />
     <Library Include="..\Lib\iconv_a.lib" />
-    <Library Include="..\Lib\libxml2.lib" />
     <Library Include="..\Lib\libxml2_a.lib" />
     <Library Include="..\Lib\zlib.lib" />
   </ItemGroup>

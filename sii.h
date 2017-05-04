@@ -29,6 +29,9 @@
 				    ((unsigned int)(b&0xff)<<8)  | \
 				     (unsigned int)(a&0xff)
 
+#define EE_TO_BYTES(x) ((x << 7) + 0x80)
+#define BYTES_TO_EE(x) ((x - 0x80) >> 7)
+
 enum eSection {
 	SII_CAT_NOP
 	,SII_PREAMBLE
@@ -125,7 +128,10 @@ struct _sii_general {
 	uint8_t sysman_class; /* reserved */
 	uint8_t flag_safe_op:1;
 	uint8_t flag_notLRW:1;
-	uint8_t flagreseved:6;
+	uint8_t flag_MBoxDataLinkLayer:1;
+	uint8_t flag_IdentALSts:1;
+	uint8_t flag_IdentPhyM:1;
+	uint8_t flagreseved:3;
 	int16_t current_ebus;
 	uint8_t reserved2[2];
 	/* physical ports
@@ -138,7 +144,8 @@ struct _sii_general {
 	uint16_t phys_port_1:4;
 	uint16_t phys_port_2:4;
 	uint16_t phys_port_3:4;
-	uint8_t reservedb[14]; /* shall be zero */
+	uint16_t physical_address;
+	uint8_t reservedb[12]; /* shall be zero */
 };
 
 enum eFmmuUsage {
@@ -193,7 +200,7 @@ struct _sii_syncm {
 #define SII_TX_PDO     2
 
 enum ePdoType {
-	RxPDO = SII_RX_PDO
+	RxPDO  = SII_RX_PDO
 	,TxPDO = SII_TX_PDO
 };
 

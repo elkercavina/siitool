@@ -13,6 +13,8 @@
 
 #define Char2xmlChar(s)   ((xmlChar *)s)
 
+#define MAX_BOOTSTRAP_STRING   18
+
 struct _esi_data {
 	SiiInfo *sii;
 	char *siifile; /* also opt for sii->outfile */
@@ -150,6 +152,14 @@ static void parse_example(xmlNode *root)
 }
 #endif
 
+static int parse_boolean(xmlChar *boolean)
+{
+	if (xmlStrcmp(boolean, Char2xmlChar("true")) == 0)
+		return 1;
+
+	return 0;
+}
+
 static uint16_t preamble_crc8(struct _sii_preamble *pa)
 {
 	if (pa == NULL)
@@ -201,12 +211,23 @@ static xmlNode *search_node(xmlNode *root, const char *name)
 	return NULL;
 }
 
-static xmlNode *search_children(xmlNode *root, const char *name)
+static xmlNode *search_node_bfs(xmlNode *root, const char *name)
 {
-	for (xmlNode *curr = root->children; curr; curr = curr->next) {
+	xmlNode *tmp = NULL;
+
+	for (xmlNode *curr = root; curr != NULL; curr = curr->next) {
 		if (curr->type == XML_ELEMENT_NODE &&
-				xmlStrncmp(curr->name, (xmlChar *)name, xmlStrlen(curr->name)) == 0)
+			strncmp((const char *)curr->name, name, strlen((const char *)curr->name)) == 0) {
 			return curr;
+		}
+	}
+
+	for (xmlNode *curr = root; curr != NULL; curr = curr->next) {
+		tmp = search_node_bfs(curr->children, name);
+
+		if (tmp != NULL) {
+			return tmp;
+		}
 	}
 
 	return NULL;
@@ -217,7 +238,7 @@ static xmlNode *search_children(xmlNode *root, const char *name)
 /* functions to parse xml */
 static struct _sii_preamble *parse_preamble(xmlNode *node)
 {
-	struct _sii_preamble *pa = malloc(sizeof(struct _sii_preamble));
+	struct _sii_preamble *pa = calloc(1, sizeof(struct _sii_preamble));
 
 	char string[1024];
 	strncpy(string, (char *)node->children->content, 1024);
@@ -263,15 +284,13 @@ static struct _sii_stdconfig *parse_config(xmlNode *root)
 {
 	xmlNode *n, *tmp;
 
-	struct _sii_stdconfig *sc = malloc(sizeof(struct _sii_stdconfig));
-	memset(sc, 0, sizeof(struct _sii_stdconfig));
-
 	//xmlNode *n = search_node(root, "Vendor");
 	n = search_node(root, "Vendor");
 	if (n==NULL) {
-		free(sc);
 		return NULL;
 	}
+
+	struct _sii_stdconfig *sc = calloc(1, sizeof(struct _sii_stdconfig));
 
 	tmp = search_node(n, "Id");
 	//char *vendoridstr = tmp->children->content;
@@ -299,7 +318,6 @@ static struct _sii_stdconfig *parse_config(xmlNode *root)
 
 	sc->serial = 0; /* FIXME the serial number is not in the esi? */
 
-	/* FIXME where are the bootstrap settings? */
 	sc->bs_rec_mbox_offset = 0;
 	sc->bs_rec_mbox_size = 0;
 	sc->bs_snd_mbox_offset = 0;
@@ -362,7 +380,7 @@ static struct _sii_stdconfig *parse_config(xmlNode *root)
 
 	/* get the supported mailboxes - these also occure again in the general section */
 
-	tmp = search_node(n, "Mailbox");
+	tmp = search_node_bfs(n, "Mailbox");
 	xmlNode *mbox;
 
 	mbox = search_node(tmp, "CoE");
@@ -384,8 +402,29 @@ static struct _sii_stdconfig *parse_config(xmlNode *root)
 	/* fetch eeprom size */
 	tmp = search_node(n, "ByteSize");
 	/* convert byte -> kbyte */
-	sc->eeprom_size = atoi((char *)tmp->children->content)/1024;
+	sc->eeprom_size = BYTES_TO_EE(atoi((char *)tmp->children->content));
 	sc->version = 1; /* also not in Esi */
+
+	tmp = search_node_bfs(n, "Eeprom");
+	if (tmp == NULL) {
+		fprintf(stderr, "Warning <Eeprom> tag not found");
+	} else {
+		xmlNode *bootstrap = search_node(tmp, "BootStrap");
+		if (bootstrap != NULL) {
+			char bsraw[MAX_BOOTSTRAP_STRING] = { 0 };
+			memmove(bsraw, (char *)bootstrap->children->content, MAX_BOOTSTRAP_STRING);
+
+			unsigned int braw[MAX_BOOTSTRAP_STRING] = { 0 };
+			sscanf(bsraw, "%2x%2x%2x%2x%2x%2x%2x%2x",
+					&braw[0], &braw[1], &braw[2], &braw[3],
+					&braw[4], &braw[5], &braw[6], &braw[7]);
+
+			sc->bs_rec_mbox_offset = braw[1] << 8 | braw[0];
+			sc->bs_rec_mbox_size =   braw[3] << 8 | braw[2];
+			sc->bs_snd_mbox_offset = braw[5] << 8 | braw[4];
+			sc->bs_snd_mbox_size =   braw[7] << 8 | braw[6];
+		}
+	}
 
 	return sc;
 }
@@ -395,8 +434,7 @@ static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root)
 	xmlNode *parent;
 	xmlNode *node;
 	xmlNode *tmp;
-	struct _sii_general *general = malloc(sizeof(struct _sii_general));
-	memset(general, 0, sizeof(struct _sii_general));
+	struct _sii_general *general = calloc(1, sizeof(struct _sii_general));
 
 	/* Search group-,image-, order- and namestring and store these strings
 	 * to the corresponding *index.
@@ -467,26 +505,26 @@ static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root)
 		}
 	}
 
-	node = search_children(parent, "Mailbox");
+	node = search_node_bfs(parent, "Mailbox");
 	tmp = search_node(node, "CoE");
 	if (tmp != NULL) {
 		general->coe_enable_sdo = 1;
 		/* parse the attributes */
 		for (xmlAttr *attr = tmp->properties; attr; attr = attr->next) {
 			if (xmlStrcmp(attr->name, Char2xmlChar("SdoInfo")) == 0)
-				general->coe_enable_sdo_info = atoi((char *)attr->children->content);
+				general->coe_enable_sdo_info = parse_boolean(attr->children->content);
 
 			if (xmlStrcmp(attr->name, Char2xmlChar("PdoAssign")) == 0)
-				general->coe_enable_pdo_assign = atoi((char *)attr->children->content);
+				general->coe_enable_pdo_assign = parse_boolean(attr->children->content);
 
 			if (xmlStrcmp(attr->name, Char2xmlChar("PdoConfig")) == 0)
-				general->coe_enable_pdo_conf = atoi((char *)attr->children->content);
+				general->coe_enable_pdo_conf = parse_boolean(attr->children->content);
 
 			if (xmlStrcmp(attr->name, Char2xmlChar("PdoUpload")) == 0)
-				general->coe_enable_upload_start = atoi((char *)attr->children->content);
+				general->coe_enable_upload_start = parse_boolean(attr->children->content);
 
 			if (xmlStrcmp(attr->name, Char2xmlChar("??sdoComplete")) == 0)
-				general->coe_enable_sdo_complete = atoi((char *)attr->children->content);
+				general->coe_enable_sdo_complete = parse_boolean(attr->children->content);
 
 			//attr = attr->next;
 		}
@@ -507,18 +545,13 @@ static void parse_fmmu(xmlNode *current, SiiInfo *sii)
 {
 	struct _sii_cat *cat = sii_category_find(sii, SII_CAT_FMMU);
 	if (cat == NULL) { /* create new category */
-		cat = malloc(sizeof(struct _sii_cat));
-		cat->next = NULL;
-		cat->prev = NULL;
-		cat->data = NULL;
+		cat = calloc(1, sizeof(struct _sii_cat));
 		cat->type = SII_CAT_FMMU;
-		cat->size = 0;
 		sii_category_add(sii, cat);
 	}
 
 	if (cat->data == NULL) { /* if category exists but doesn't contain any data */
-		cat->data = (void *)malloc(sizeof(struct _sii_fmmu));
-		memset(cat->data, 0, sizeof(struct _sii_fmmu));
+		cat->data = (void *)calloc(1, sizeof(struct _sii_fmmu));
 	}
 
 	struct _sii_fmmu *fmmu = (struct _sii_fmmu *)cat->data;
@@ -542,27 +575,20 @@ static void parse_syncm(xmlNode *current, SiiInfo *sii)
 {
 	struct _sii_cat *cat = sii_category_find(sii, SII_CAT_SYNCM);
 	if (cat == NULL) {
-		cat = malloc(sizeof(struct _sii_cat));
-		cat->next = NULL;
-		cat->prev = NULL;
-		cat->data = NULL;
+		cat = calloc(1, sizeof(struct _sii_cat));
 		cat->type = SII_CAT_SYNCM;
-		cat->size = 0;
 		sii_category_add(sii, cat);
 	}
 
 	if (cat->data == NULL) {
-		cat->data = (void *)malloc(sizeof(struct _sii_syncm));
-		memset(cat->data, 0, sizeof(struct _sii_syncm));
+		cat->data = (void *)calloc(1, sizeof(struct _sii_syncm));
 	}
 
 	/* now fetch the data */
 	//size_t smsize = 0;
 	struct _sii_syncm *sm = (struct _sii_syncm *)cat->data;
-	struct _syncm_entry *entry = malloc(sizeof(struct _syncm_entry));
+	struct _syncm_entry *entry = calloc(1, sizeof(struct _syncm_entry));
 	entry->id = -1;
-	entry->next = NULL;
-	entry->prev = NULL;
 
 	xmlAttr *args = current->properties;
 	for (xmlAttr *a = args; a ; a = a->next) {
@@ -602,11 +628,8 @@ static void parse_syncm(xmlNode *current, SiiInfo *sii)
 
 static void get_dc_proto(SiiInfo *sii)
 {
-	struct _sii_cat *cat = malloc(sizeof(struct _sii_cat));
-	cat->next = NULL;
-	cat->prev = NULL;
+	struct _sii_cat *cat = calloc(1, sizeof(struct _sii_cat));
 	cat->type = SII_CAT_DCLOCK;
-	cat->size = 0;
 
 	/* now fetch the data */
 	struct _sii_dclock *dc = dclock_get_default();
@@ -619,16 +642,12 @@ static void get_dc_proto(SiiInfo *sii)
 #if 0 // FIXME this is a future feature - don't remove
 static void parse_dclock(xmlNode *current, SiiInfo *sii)
 {
-	struct _sii_cat *cat = malloc(sizeof(struct _sii_cat));
-	cat->next = NULL;
-	cat->prev = NULL;
+	struct _sii_cat *cat = calloc(1, sizeof(struct _sii_cat));
 	cat->type = SII_CAT_DCLOCK;
-	cat->size = 0;
 
 	/* now fetch the data */
 	size_t dcsize = 0;
-	struct _sii_dclock *dc = malloc(sizeof(struct _sii_dclock));
-	memset(dc, 0, sizeof(struct _sii_dclock));
+	struct _sii_dclock *dc = calloc(1, sizeof(struct _sii_dclock));
 
 	/* FIXME add entries, only use the first (default) OpMode */
 	printf("[DEBUG %s] FIXME implementation of dclock parsing is incomplete!\n", __func__);
@@ -716,10 +735,9 @@ static int parse_pdo_get_data_type(char *xmldatatype)
 
 static struct _pdo_entry *parse_pdo_entry(xmlNode *val, SiiInfo *sii)
 {
-	struct _pdo_entry *entry = malloc(sizeof(struct _pdo_entry));
-	int tmp = 0;
+	struct _pdo_entry *entry = calloc(1, sizeof(struct _pdo_entry));
 
-	memset(entry, 0, sizeof(struct _pdo_entry));
+	int tmp = 0;
 
 	for (xmlNode *child = val->children; child; child = child->next) {
 		if (xmlStrncmp(child->name, Char2xmlChar("Index"), xmlStrlen(child->name)) == 0) {
@@ -734,7 +752,13 @@ static struct _pdo_entry *parse_pdo_entry(xmlNode *val, SiiInfo *sii)
 			entry->bit_length = atoi((char *)child->children->content);
 		} else if (xmlStrncmp(child->name, Char2xmlChar("Name"), xmlStrlen(child->name)) == 0) {
 			/* again, write this to the string category and store index to string here. */
-			tmp = sii_strings_add(sii, (char *)child->children->content);
+			if (child->children == NULL) {
+				fprintf(stderr, "[WARNING] Reading child content of size 0 (line: %d)\n", child->line);
+				tmp = -1;
+			} else {
+				tmp = sii_strings_add(sii, (char *)child->children->content);
+			}
+
 			if (tmp < 0) {
 				fprintf(stderr, "Error creating input string!\n");
 				entry->string_index = 0;
@@ -742,6 +766,11 @@ static struct _pdo_entry *parse_pdo_entry(xmlNode *val, SiiInfo *sii)
 				entry->string_index = (uint8_t)tmp&0xff;
 			}
 		} else if (xmlStrncmp(child->name, Char2xmlChar("DataType"), xmlStrlen(child->name)) == 0) {
+			if (child->children == NULL) {
+				fprintf(stderr, "Warning unspecified datatype found. Please check your ESI, datatype is set to 0\n");
+				continue;
+			}
+
 			int dt = parse_pdo_get_data_type((char *)child->children->content);
 			if (dt <= 0)
 				fprintf(stderr, "Warning unrecognized esi data type '%s'\n", (char *)child->children->content);
@@ -760,7 +789,7 @@ static struct _pdo_entry *parse_pdo_entry(xmlNode *val, SiiInfo *sii)
 
 static void parse_pdo(xmlNode *current, SiiInfo *sii)
 {
-	enum ePdoType type;
+	enum eSection type;
 	if (xmlStrcmp(current->name, Char2xmlChar("RxPdo")) == 0)
 		type = SII_CAT_RXPDO;
 	else if(xmlStrcmp(current->name, Char2xmlChar("TxPdo")) == 0)
@@ -772,18 +801,13 @@ static void parse_pdo(xmlNode *current, SiiInfo *sii)
 
 	struct _sii_cat *cat = sii_category_find(sii, type);
 	if (cat == NULL) {
-		cat = malloc(sizeof(struct _sii_cat));
-		cat->next = NULL;
-		cat->prev = NULL;
-		cat->data = NULL;
+		cat = calloc(1, sizeof(struct _sii_cat));
 		cat->type = type;
-		cat->size = 0;
 		sii_category_add(sii, cat);
 	}
 
 	if (cat->data == NULL) {
-		cat->data = (void *)malloc(sizeof(struct _sii_pdo));
-		memset(cat->data, 0, sizeof(struct _sii_pdo));
+		cat->data = (void *)calloc(1, sizeof(struct _sii_pdo));
 	}
 
 	struct _sii_pdo *pdo = (struct _sii_pdo *)cat->data;
@@ -837,18 +861,12 @@ static void parse_pdo(xmlNode *current, SiiInfo *sii)
 
 struct _esi_data *esi_init(const char *file)
 {
-	struct _esi_data *esi = (struct _esi_data *)malloc(sizeof(struct _esi_data));
-	esi->sii = NULL;
-	esi->siifile = NULL;
-	esi->doc = NULL;
-	esi->xmlroot = NULL;
-	esi->xmlfile = NULL;
-
 	if (file == NULL) {
 		fprintf(stderr, "Warning, init with empty filename\n");
-		free(esi);
 		return NULL;
 	}
+
+	struct _esi_data *esi = (struct _esi_data *)calloc(1, sizeof(struct _esi_data));
 
 	enum eFileType type = efile_type(file);
 	switch (type) {
@@ -890,12 +908,7 @@ struct _esi_data *esi_init(const char *file)
 /* FIXME Input type is already given in the calling function parse_xml_input() */
 EsiData *esi_init_string(const unsigned char *buf, size_t size)
 {
-	EsiData *esi = malloc(sizeof(struct _esi_data));
-	esi->sii = NULL;
-	esi->siifile = NULL;
-	esi->doc = NULL;
-	esi->xmlroot = NULL;
-	esi->xmlfile = NULL;
+	EsiData *esi = calloc(1, sizeof(struct _esi_data));
 
 	enum eFileType type = UNKNOWN;
 
@@ -966,13 +979,9 @@ int esi_parse(EsiData *esi)
 	/* first, prepare category strings, since this is always needed */
 	struct _sii_cat *strings = sii_category_find(esi->sii, SII_CAT_STRINGS);
 	if (strings == NULL) {
-		strings = malloc(sizeof(struct _sii_cat));
-		strings->next = NULL;
-		strings->prev = NULL;
-		strings->size = 0;
+		strings = calloc(1, sizeof(struct _sii_cat));
 		strings->type = SII_CAT_STRINGS;
-		struct _sii_strings *strdata = malloc(sizeof(struct _sii_strings));
-		memset(strdata, 0, sizeof(struct _sii_strings));
+		struct _sii_strings *strdata = calloc(1, sizeof(struct _sii_strings));
 		strings->data = strdata;
 		sii_category_add(esi->sii, strings);
 	}
@@ -982,9 +991,7 @@ int esi_parse(EsiData *esi)
 	esi->sii->config = parse_config(root);
 
 	struct _sii_general *general = parse_general(esi->sii, root);
-	struct _sii_cat *gencat = malloc(sizeof(struct _sii_cat));
-	gencat->next = NULL;
-	gencat->prev = NULL;
+	struct _sii_cat *gencat = calloc(1, sizeof(struct _sii_cat));
 	gencat->type = SII_CAT_GENERAL;
 	gencat->size = sizeof(struct _sii_general);
 	gencat->data = (void *)general;

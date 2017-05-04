@@ -47,13 +47,6 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#define VERSION_MAJOR    1
-#define VERSION_MINOR    0
-#define VERSION_APPEND   ""
-
-#define VERSION_STRING(x,y,z)  VERSION_ARGS(x, y, z)
-#define VERSION_ARGS(x,y,z)    "Version " #x "." #y z
-
 #define MAX_BUFFER_SIZE    (1000*1024)
 #define MAX_FILENAME_SIZE  (256)
 
@@ -121,8 +114,13 @@ static enum eInputFileType check_file_suffix(const char *filename)
 static enum eInputFileType check_first_bytes(unsigned char *buffer)
 {
 	enum eInputFileType type = UNDEFINED;
+	unsigned char *head = buffer;
 
-	if (strncmp((char *)buffer, "<?xml", 5) == 0)
+	if ((*(int *)head & 0xffffff) == 0xbfbbef) {
+		head += 3;
+	}
+
+	if (strncmp((char *)head, "<?xml", 5) == 0)
 		type = ESIXML;
 	else
 		type = SIIEEPROM; /* educated guess: if it's not XML it must be SII */
@@ -247,7 +245,7 @@ int main(int argc, char *argv[])
 			} else if (argv[i][1] == 'v') {
 				printf("%s %s\n",
 					base(argv[0]),
-					VERSION_STRING(VERSION_MAJOR,VERSION_MINOR,VERSION_APPEND));
+					VERSION);
 				return 0;
 			} else if (argv[i][1] == 'o') {
 				i++;
@@ -296,12 +294,17 @@ int main(int argc, char *argv[])
 
 	/* recognize input */
 	enum eInputFileType filetype = file_type(filename, eeprom);
+	unsigned char *xml_start = eeprom;
 	switch (filetype) {
 	case ESIXML:
 #if DEBUG == 1
 		printf("Processing ESI/XML file\n");
 #endif
-		ret = parse_xml_input(eeprom, output);
+		/* Start XML processing at the first '<' character to avoid strange behavior when parsing. */
+		while (*xml_start != '<')
+			xml_start++;
+
+		ret = parse_xml_input(xml_start, output);
 		break;
 
 	case SIIEEPROM:

@@ -65,7 +65,8 @@ static int read_eeprom(FILE *f, unsigned char *buffer, size_t size)
 
 static struct _sii_preamble * parse_preamble(const unsigned char *buffer, size_t size)
 {
-	struct _sii_preamble *preamble = malloc(sizeof(struct _sii_preamble));
+	struct _sii_preamble *preamble = calloc(1, sizeof(struct _sii_preamble));
+
 	size_t count = 0;
 	uint8_t crc = 0xff; /* init value for crc */
 
@@ -124,7 +125,9 @@ static struct _sii_stdconfig *parse_stdconfig(const unsigned char *buffer, size_
 {
 	size_t count =0;
 	const unsigned char *b = buffer;
-	struct _sii_stdconfig *stdc = malloc(sizeof(struct _sii_stdconfig));
+
+	struct _sii_stdconfig *stdc = calloc(1, sizeof(struct _sii_stdconfig));
+
 	stdc->vendor_id = BYTES_TO_DWORD(*(b+0), *(b+1), *(b+2), *(b+3));
 	b+=4;
 	stdc->product_id = BYTES_TO_DWORD(*(b+0), *(b+1), *(b+2), *(b+3));
@@ -172,16 +175,12 @@ static struct _sii_stdconfig *parse_stdconfig(const unsigned char *buffer, size_
 
 static struct _string *string_new(const char *string, size_t size)
 {
-	struct _string *new = malloc(sizeof(struct _string));
+	struct _string *new = calloc(1, sizeof(struct _string));
 
-	new->id = 0;
-	new->next = NULL;
-	new->prev = NULL;
-
-	new->data = malloc(size+1);
 	new->length = size;
-	memset(new->data, 0, size+1);
+	new->data = malloc(size+1);
 	memmove(new->data, string, size);
+	new->data[size] = 0;
 
 	return new;
 }
@@ -213,11 +212,8 @@ static struct _sii_strings *parse_string_section(const unsigned char *buffer, si
 	size_t len = 0;
 	memset(str, '\0', 1024);
 
-	struct _sii_strings *strings = (struct _sii_strings *)malloc(sizeof(struct _sii_strings));
-	strings->head = NULL;
-	strings->current = NULL;
-	strings->count = 0;
-	strings->size = 0;
+	struct _sii_strings *strings = (struct _sii_strings *)calloc(1, sizeof(struct _sii_strings));
+
 	int stringcount = *pos++;
 	int counter = 0;
 
@@ -263,7 +259,7 @@ static char *physport_type(uint8_t b)
 static struct _sii_general *parse_general_section(const unsigned char *buffer, size_t size)
 {
 	const unsigned char *b = buffer;
-	struct _sii_general *siig = malloc(sizeof(struct _sii_general));
+	struct _sii_general *siig = calloc(1, sizeof(struct _sii_general));
 
 	siig->groupindex = *b;
 	b++;
@@ -289,8 +285,11 @@ static struct _sii_general *parse_general_section(const unsigned char *buffer, s
 	b++;
 	b+=3; /* SoE Channels, DS402 Channels, Sysman Class - reserved */
 
-	siig->flag_safe_op = (*b & 0x01) == 0 ? 0 : 1;
-	siig->flag_notLRW = (*b & 0x02) == 0 ? 0 : 1;
+	siig->flag_safe_op           = (*b & 0x01) == 0 ? 0 : 1;
+	siig->flag_notLRW            = (*b & 0x02) == 0 ? 0 : 1;
+	siig->flag_MBoxDataLinkLayer = (*b & 0x04) == 0 ? 0 : 1;
+	siig->flag_IdentALSts        = (*b & 0x08) == 0 ? 0 : 1;
+	siig->flag_IdentPhyM         = (*b & 0x10) == 0 ? 0 : 1;
 	b++;
 
 	siig->current_ebus = BYTES_TO_WORD(*b, *(b+1));
@@ -303,7 +302,11 @@ static struct _sii_general *parse_general_section(const unsigned char *buffer, s
 	siig->phys_port_2 = *b&0xf;
 	siig->phys_port_3 = (*b>>4)&0xf;
 	b++;
-	b+=14;
+
+	siig->physical_address = BYTES_TO_WORD(*b, *(b+1));
+	b+=2;
+
+	b+=12; /* reserved */
 
 	size_t count = b-buffer;
 	if (size != count)
@@ -328,9 +331,7 @@ static void fmmu_rm_entry(struct _sii_fmmu *fmmu)
 
 void fmmu_add_entry(struct _sii_fmmu *fmmu, int usage)
 {
-	struct _fmmu_entry *new = malloc(sizeof(struct _fmmu_entry));
-	new->prev = NULL;
-	new->next = NULL;
+	struct _fmmu_entry *new = calloc(1, sizeof(struct _fmmu_entry));
 	new->id = -1;
 	new->usage = usage;
 
@@ -354,9 +355,7 @@ static struct _sii_fmmu *parse_fmmu_section(const unsigned char *buffer, size_t 
 {
 	const unsigned char *b = buffer;
 
-	struct _sii_fmmu *fmmu = malloc(sizeof(struct _sii_fmmu));
-	fmmu->count = 0;
-	fmmu->list = NULL;
+	struct _sii_fmmu *fmmu = calloc(1, sizeof(struct _sii_fmmu));
 
 	while ((unsigned int)(b-buffer)<secsize) {
 		fmmu_add_entry(fmmu, *b);
@@ -406,10 +405,8 @@ void syncm_entry_add(struct _sii_syncm *sm, struct _syncm_entry *entry)
 static void syncm_add_entry(struct _sii_syncm *sm,
 		int phys_address, int length, int control, int status, int enable, int type)
 {
-	struct _syncm_entry *entry = malloc(sizeof(struct _syncm_entry));
+	struct _syncm_entry *entry = calloc(1, sizeof(struct _syncm_entry));
 	entry->id = -1;
-	entry->next = NULL;
-	entry->prev = NULL;
 	entry->phys_address = phys_address;
 	entry->length = length;
 	entry->control = control;
@@ -441,9 +438,7 @@ static struct _sii_syncm *parse_syncm_section(const unsigned char *buffer, size_
 	int smnbr = 0;
 	const unsigned char *b = buffer;
 
-	struct _sii_syncm *sm = malloc(sizeof(struct _sii_syncm));
-	sm->list = NULL;
-	sm->count = 0;
+	struct _sii_syncm *sm = calloc(1, sizeof(struct _sii_syncm));
 
 	while (count<secsize) {
 		int physadr = BYTES_TO_WORD(*b, *(b+1));
@@ -510,7 +505,7 @@ static void pdo_add_entry(struct _sii_pdo *pdo,
 		int index, int subindex, int string_index, int data_type,
 		int bit_length, int flags)
 {
-	struct _pdo_entry *entry = malloc(sizeof(struct _pdo_entry));
+	struct _pdo_entry *entry = calloc(1, sizeof(struct _pdo_entry));
 
 	entry->id = -1;
 	entry->index = index;
@@ -519,8 +514,6 @@ static void pdo_add_entry(struct _sii_pdo *pdo,
 	entry->data_type = data_type;
 	entry->bit_length = bit_length;
 	entry->flags = flags;
-	entry->next = NULL;
-	entry->prev = NULL;
 
 	/* FIXME make use of pdo_entry_add() */
 	if (pdo->list == NULL) {
@@ -543,8 +536,7 @@ static struct _sii_pdo *parse_pdo_section(const unsigned char *buffer, size_t se
 	const unsigned char *b = buffer;
 	int entry = 0;
 
-	struct _sii_pdo *pdo = malloc(sizeof(struct _sii_pdo));
-	memset(pdo, 0, sizeof(struct _sii_pdo));
+	struct _sii_pdo *pdo = calloc(1, sizeof(struct _sii_pdo));
 
 	switch (t) {
 	case RxPDO:
@@ -609,8 +601,7 @@ static struct _sii_dclock *parse_dclock_section(const unsigned char *buffer, siz
 {
 	const unsigned char *b = buffer;
 
-	struct _sii_dclock *dc = malloc(sizeof(struct _sii_dclock));
-	memset(dc, 0, sizeof(struct _sii_dclock));
+	struct _sii_dclock *dc = calloc(1, sizeof(struct _sii_dclock));
 
 	b++; /* first byte is reserved */
 
@@ -935,14 +926,12 @@ static void cat_data_cleanup(struct _sii_cat *cat)
 #if 0
 static struct _sii_cat *cat_new_data(uint16_t type, uint16_t size, void *data)
 {
-	struct _sii_cat *new = malloc(sizeof(struct _sii_cat));
+	struct _sii_cat *new = calloc(1, sizeof(struct _sii_cat));
 
 	new->type   = type&0x7fff;
 	new->vendor = (type>>16)&0x1;
 	new->size   = size;
 	new->data   = data;
-	new->next   = NULL;
-	new->prev   = NULL;
 
 	return new;
 }
@@ -950,14 +939,11 @@ static struct _sii_cat *cat_new_data(uint16_t type, uint16_t size, void *data)
 
 static struct _sii_cat *cat_new(uint16_t type, uint16_t size)
 {
-	struct _sii_cat *new = malloc(sizeof(struct _sii_cat));
+	struct _sii_cat *new = calloc(1, sizeof(struct _sii_cat));
 
 	new->type   = type&0x7fff;
 	new->vendor = (type>>16)&0x1;
 	new->size   = size;
-	new->data   = NULL;
-	new->next   = NULL;
-	new->prev   = NULL;
 
 	return new;
 }
@@ -1144,7 +1130,7 @@ static struct _sii_cat *sii_category_find_neighbor(struct _sii_cat *cat, enum eS
 
 static void cat_print_general(struct _sii_cat *cat)
 {
-	printf("Printing Categorie General 0x%x (byte size: %d)\n", cat->type, cat->size);
+	printf("  Size: %d Bytes\n", cat->size);
 	struct _sii_general *gen = (struct _sii_general *)cat->data;
 
 	//printf("General:\n");
@@ -1186,9 +1172,13 @@ static void cat_print_general(struct _sii_cat *cat)
 	printf("  FoE Details: ................... %s\n", gen->foe_enabled == 0 ? "not enabled" : "enabled");
 	printf("  EoE Details: ................... %s\n", gen->eoe_enabled == 0 ? "not enabled" : "enabled");
 
-
+	printf("\n");
 	printf("  Flag SafeOp: ................... %s\n", gen->flag_safe_op == 0 ? "not enabled" : "enabled");
 	printf("  Flag notLRW: ................... %s\n", gen->flag_notLRW == 0 ? "not enabled" : "enabled");
+	printf("  Flag MBox Data Link Layer ...... %s\n", gen->flag_MBoxDataLinkLayer == 0 ? "not enabled" : "enabled");
+	printf("  Flag Ident AL Status ........... %s\n", gen->flag_IdentALSts == 0 ? "not enabled" : "enabled");
+	printf("  Flag Ident Physical Memory ..... %s\n", gen->flag_IdentPhyM == 0  ? "not enabled" : "enabled");
+	printf("\n");
 
 	printf("  CurrentOnEBus: ................. %d mA\n", gen->current_ebus);
 
@@ -1197,6 +1187,8 @@ static void cat_print_general(struct _sii_cat *cat)
 	printf("     Port 1: ..................... %s\n", physport_type(gen->phys_port_1));
 	printf("     Port 2: ..................... %s\n", physport_type(gen->phys_port_2));
 	printf("     Port 3: ..................... %s\n", physport_type(gen->phys_port_3));
+	printf("\n");
+	printf("  Physical Memory Address ........ 0x%.4x\n", gen->physical_address);
 	printf("\n");
 }
 
@@ -1416,7 +1408,7 @@ static uint16_t sii_cat_write_general(struct _sii_cat *cat, unsigned char *buf)
 	unsigned char *b = buf;
 #if DEBUG == 1
 	size_t size = sizeof(struct _sii_general)/sizeof(unsigned char);
-	printf("DEBUG Categorie general is %d bytes\n", size);
+	printf("DEBUG Categorie general is %lu bytes\n", size);
 #endif
 
 	struct _sii_general *bcat = (struct _sii_general *)cat->data;
@@ -1438,15 +1430,21 @@ static uint16_t sii_cat_write_general(struct _sii_cat *cat, unsigned char *buf)
 	*b++ = 0x00; /* ds402_channels */
 	*b++ = 0x00; /* sysman class */
 	*b++ = (bcat->flag_safe_op&0x01) |
-		((bcat->flag_notLRW>>1)&0x01);
+		((bcat->flag_notLRW<<1)&0x02) |
+		((bcat->flag_MBoxDataLinkLayer<<2)&0x04) |
+		((bcat->flag_IdentALSts<<3)&0x08) |
+		((bcat->flag_IdentPhyM<<4)&0x10);
 	*b++ = bcat->current_ebus&0xff;
 	*b++ = (bcat->current_ebus>>8)&0xff;
-	*b++ = 0x00;
+	*b++ = bcat->groupindex&0xff; /* mirrored groupindex */
 	*b++ = 0x00;
 	*b++ = (bcat->phys_port_0&0x0f) | ((bcat->phys_port_1<<4)&0xf0);
 	*b++ = (bcat->phys_port_2&0x0f) | ((bcat->phys_port_3<<4)&0xf0);
 
-	for (int i=0; i<14; i++)
+	*b++ = bcat->physical_address&0xff;
+	*b++ = (bcat->physical_address>>8)&0xff;
+
+	for (int i=0; i<12; i++)
 		*b++ = 0x00;
 
 	return (uint16_t)(b-buf);
@@ -1652,7 +1650,7 @@ static uint16_t sii_cat_write_cat(struct _sii_cat *cat, unsigned char *buf)
 	for (size_t i=0; i<catbsz; i++)
 		*b++ = *catb++;
 
-	printf("DEBUG: print cat: 0x%x; expected write: %d, written: %d\n",
+	printf("DEBUG: print cat: 0x%x; expected write: %lu, written: %ld\n",
 			cat->type, catbsz, (b-buf));
 
 	return (uint16_t)(b-buf);
@@ -1732,6 +1730,11 @@ static size_t sii_cat_write(struct _sii *sii)
 					cat2string(cat->type), cat->type);
 			buf -= 4; /* rewind */
 			goto nextcat;
+		}
+
+		/* hot patch for uneven string category sizes */
+		if ((SII_CAT_STRINGS == cat->type) && (catsize % 2 != 0)) {
+			catsize += 1;
 		}
 
 		written += catsize+4;
@@ -1927,7 +1930,7 @@ static void sii_write(SiiInfo *sii)
 	sii->rawsize = (size_t)(outbuf-sii->rawbytes);
 
 #if DEBUG == 1
-	printf("DEBUG sii_write() wrote %d bytes for preamble and std config\n", sii->rawsize);
+	printf("DEBUG sii_write() wrote %lu bytes for preamble and std config\n", sii->rawsize);
 #endif
 
 	// - iterate through categories
@@ -1950,32 +1953,18 @@ static void sii_write(SiiInfo *sii)
 
 SiiInfo *sii_init(void)
 {
-	SiiInfo *sii = malloc(sizeof(SiiInfo));
-
-	sii->cat_head = NULL;
-	sii->cat_current = NULL;
-	sii->outfile = NULL;
-	sii->rawbytes = NULL;
-	sii->rawvalid = 0;
-
+	SiiInfo *sii = calloc(1, sizeof(SiiInfo));
 	return sii;
 }
 
 SiiInfo *sii_init_string(const unsigned char *eeprom, size_t size)
 {
-	SiiInfo *sii = malloc(sizeof(SiiInfo));
-
 	if (eeprom == NULL) {
 		fprintf(stderr, "No eeprom provided\n");
-		free(sii);
 		return NULL;
 	}
 
-	sii->cat_head = NULL;
-	sii->cat_current = NULL;
-	sii->rawbytes = NULL;
-	sii->rawvalid = 0;
-	sii->outfile = NULL;
+	SiiInfo *sii = calloc(1, sizeof(SiiInfo));
 
 	parse_content(sii, eeprom, size);
 
@@ -1984,23 +1973,15 @@ SiiInfo *sii_init_string(const unsigned char *eeprom, size_t size)
 
 SiiInfo *sii_init_file(const char *filename)
 {
-	SiiInfo *sii = malloc(sizeof(SiiInfo));
-	unsigned char eeprom[1024];
-
-	if (filename != NULL)
-		read_eeprom(stdin, eeprom, 1024);
-	else {
+	if (filename == NULL) {
 		fprintf(stderr, "Error no filename provided\n");
-		free(sii);
 		return NULL;
 	}
 
-	sii->cat_head = NULL;
-	sii->cat_current = NULL;
-	sii->rawbytes = NULL;
-	sii->rawvalid = 0;
-	sii->outfile = NULL;
+	SiiInfo *sii = calloc(1, sizeof(SiiInfo));
+	unsigned char eeprom[1024];
 
+	read_eeprom(stdin, eeprom, 1024);
 	parse_content(sii, eeprom, 1024);
 
 	return sii;
@@ -2029,9 +2010,8 @@ void sii_release(SiiInfo *sii)
 
 size_t sii_generate(SiiInfo *sii)
 {
-	size_t maxsize = sii->config->eeprom_size * 1024;
-	sii->rawbytes = (uint8_t*) malloc(maxsize);
-	memset(sii->rawbytes, 0, maxsize);
+	size_t maxsize = EE_TO_BYTES(sii->config->eeprom_size);
+	sii->rawbytes = (uint8_t*) calloc(1, maxsize);
 	sii->rawsize = 0;
 
 	sii_write(sii);
@@ -2088,7 +2068,7 @@ void sii_print(SiiInfo *sii)
 		printf("  VoE ....................... %s\n", (stdc->mailbox_protocol.word&MBOX_VOE) ? "True" : "False");
 		printf("\n");
 
-		printf("EEPROM size: ................ %d kbit\n", stdc->eeprom_size);
+		printf("EEPROM size: ................ %d bytes\n", EE_TO_BYTES(stdc->eeprom_size));
 		printf("Version: .................... %d\n", stdc->version);
 		printf("\n");
 	}

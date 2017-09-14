@@ -47,6 +47,12 @@
 #include <stdlib.h>
 #include <errno.h>
 
+// win32 version import
+#ifdef _WIN32
+	#include "Version.h"
+	#define VERSION GEN_VER_VERSION_STRING
+#endif
+
 #define MAX_BUFFER_SIZE    (1000*1024)
 #define MAX_FILENAME_SIZE  (256)
 

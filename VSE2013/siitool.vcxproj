@@ -82,6 +82,9 @@
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalDependencies>Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PreBuildEvent>
+      <Command>CALL $(SolutionDir)\GIT-VS-VERSION-GEN.bat "$(SolutionDir).." "$(SolutionDir)..\Version.h"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\crc8.h" />

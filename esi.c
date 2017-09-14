@@ -197,11 +197,12 @@ static uint16_t preamble_crc8(struct _sii_preamble *pa)
 static xmlNode *search_next_node(xmlNode *root, const char *name)
 {
 	xmlNode *tmp = NULL;
-
-	for (xmlNode *curr = root; curr; curr = curr->next) {
-		if (curr->type == XML_ELEMENT_NODE &&
-			strncmp((const char *)curr->name, name, strlen((const char *)curr->name)) == 0)
-			return curr;
+	if (root != NULL) {
+		for (xmlNode *curr = root->next; curr; curr = curr->next) {
+			if (curr->type == XML_ELEMENT_NODE &&
+				strncmp((const char *)curr->name, name, strlen((const char *)curr->name)) == 0)
+				return curr;
+		}
 	}
 
 	return NULL;
@@ -295,7 +296,7 @@ static struct _sii_preamble *parse_preamble(xmlNode *node)
 	return pa;
 }
 
-static struct _sii_stdconfig *parse_config(xmlNode *root)
+static struct _sii_stdconfig *parse_config(xmlNode *root, int ndev)
 {
 	xmlNode *n, *tmp;
 
@@ -315,6 +316,10 @@ static struct _sii_stdconfig *parse_config(xmlNode *root)
 	sscanf((const char *)tmp->children->content, "#x%x", &(sc->vendor_id));
 
 	n = search_node(search_node(root, "Devices"), "Device");
+	for (int i = 0; i < ndev; i++) {
+		n = search_next_node(n, "Device");
+		if (n == NULL) return NULL;
+	}
 
 	tmp = search_node(n, "Type");
 	xmlAttr *prop = tmp->properties;
@@ -444,7 +449,7 @@ static struct _sii_stdconfig *parse_config(xmlNode *root)
 	return sc;
 }
 
-static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root)
+static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root, int ndev)
 {
 	xmlNode *parent;
 	xmlNode *node;
@@ -466,18 +471,22 @@ static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root)
 	general->orderindex = 0;
 
 	parent = search_node(root, "Devices");
-	node = search_node(parent, "Device"); /* FIXME handle multiple groups??? */
+	node = search_node(parent, "Device");
+	for (int i = 0; i < ndev; i++) {
+		node = search_next_node(node, "Device");
+		if (node == NULL) return NULL;
+	}
+
 	tmp = search_node(node, "Name"); /* FIXME check language id and use the english version */
 	general->nameindex = sii_strings_add(sii, (const char *)tmp->children->content);
 
 	/* reset temporial nodes */
-	parent = NULL;
+	parent = node;
 	node = NULL;
 	tmp = NULL;
 
 	/* fetch CoE details */
 	//printf("[DEBUG %s] get CoE details\n", __func__);
-	parent = search_node(root, "Device");
 	
 	for (xmlAttr *attr = parent->properties; attr; attr = attr->next) {
 		if (xmlStrcmp(attr->name, Char2xmlChar("Physics")) == 0) {
@@ -1003,19 +1012,17 @@ int esi_parse(EsiData *esi, int ndev)
 
 	xmlNode *n = search_node(root, "ConfigData");
 	esi->sii->preamble = parse_preamble(n);
-	esi->sii->config = parse_config(root);
+	esi->sii->config = parse_config(root, ndev);
 
-	struct _sii_general *general = parse_general(esi->sii, root);
+	struct _sii_general *general = parse_general(esi->sii, root, ndev);
 	struct _sii_cat *gencat = calloc(1, sizeof(struct _sii_cat));
 	gencat->type = SII_CAT_GENERAL;
 	gencat->size = sizeof(struct _sii_general);
 	gencat->data = (void *)general;
 	sii_category_add(esi->sii, gencat);
 
-	/* get the first device */
+	/* get the device */
 	xmlNode *device = search_node(search_node(root, "Devices"), "Device");
-
-	/* eventually iterate to next devices */
 	for (int i = 0; i < ndev; i++) {
 		device = search_next_node(device, "Device");
 		if (device == NULL) return -1;

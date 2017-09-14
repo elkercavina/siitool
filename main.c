@@ -156,11 +156,12 @@ static enum eInputFileType file_type(const char *filename, unsigned char *buffer
 
 static void printhelp(const char *prog)
 {
-	printf("Usage: %s [-h] [-v] [-p] [-o outfile] [filename]\n", prog);
+	printf("Usage: %s [-h] [-v] [-p] [-n ndev] [-o outfile] [filename]\n", prog);
 	printf("  -h         print this help and exit\n");
 	printf("  -v         print version an exit\n");
 	printf("  -o <name>  write output to file <name>\n");
 	printf("  -p         print content human readable\n");
+	printf("  -n <ndev>  use device 'ndev' in multi device ESI (0=first)\n");
 	printf("  filename   path to eeprom file, if missing read from stdin\n");
 	printf("\nRecognized file types: SII and ESI/XML.\n");
 }
@@ -179,12 +180,12 @@ static int read_input(FILE *f, unsigned char *buffer, size_t size)
 	return count;
 }
 
-static int parse_xml_input(const unsigned char *buffer, const char *output)
+static int parse_xml_input(const unsigned char *buffer, const char *output, int ndev)
 {
 	EsiData *esi = esi_init_string(buffer, MAX_BUFFER_SIZE);
 	//esi_print_xml(esi);
 
-	if (esi_parse(esi)) {
+	if (esi_parse(esi, ndev)) {
 		fprintf(stderr, "Error something went wrong in XML parsing\n");
 		esi_release(esi);
 		return -1;
@@ -241,6 +242,7 @@ int main(int argc, char *argv[])
 	char *filename = NULL;
 	char *output = NULL;
 	int ret = -1;
+	int ndev = 0;
 
 	for (int i=1; i<argc; i++) {
 		switch (argv[i][0]) {
@@ -257,8 +259,17 @@ int main(int argc, char *argv[])
 				i++;
 				output = malloc(strlen(argv[i])+1);
 				memmove(output, argv[i], strlen(argv[i])+1);
-			} else if (argv[i][1] == 'p') {
+			}
+			else if (argv[i][1] == 'p') {
 				g_print_content = 1;
+			} 
+			else if (argv[i][1] == 'n') {
+				i++;
+				ndev = atoi(argv[i]);
+				if (ndev < 0 || ndev>255) {
+					fprintf(stderr, "Cannot parse device number\n");
+					return 0;
+				}
 			} else if (argv[i][1] == '\0') { /* read from stdin (default) */
 				filename = NULL;
 			} else {
@@ -310,7 +321,7 @@ int main(int argc, char *argv[])
 		while (*xml_start != '<')
 			xml_start++;
 
-		ret = parse_xml_input(xml_start, output);
+		ret = parse_xml_input(xml_start, output, ndev);
 		break;
 
 	case SIIEEPROM:

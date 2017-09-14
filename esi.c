@@ -193,6 +193,20 @@ static uint16_t preamble_crc8(struct _sii_preamble *pa)
 	return pa->checksum;
 }
 
+/* Searches the first occurence of node named 'name' only looking into next */
+static xmlNode *search_next_node(xmlNode *root, const char *name)
+{
+	xmlNode *tmp = NULL;
+
+	for (xmlNode *curr = root; curr; curr = curr->next) {
+		if (curr->type == XML_ELEMENT_NODE &&
+			strncmp((const char *)curr->name, name, strlen((const char *)curr->name)) == 0)
+			return curr;
+	}
+
+	return NULL;
+}
+
 /* Searches the first occurence of node named 'name' */
 static xmlNode *search_node(xmlNode *root, const char *name)
 {
@@ -973,7 +987,7 @@ void esi_release(struct _esi_data *esi)
 	free(esi);
 }
 
-int esi_parse(EsiData *esi)
+int esi_parse(EsiData *esi, int ndev)
 {
 	xmlNode *root = xmlDocGetRootElement(esi->doc);
 
@@ -1001,6 +1015,12 @@ int esi_parse(EsiData *esi)
 	/* get the first device */
 	xmlNode *device = search_node(search_node(root, "Devices"), "Device");
 
+	/* eventually iterate to next devices */
+	for (int i = 0; i < ndev; i++) {
+		device = search_next_node(device, "Device");
+		if (device == NULL) return -1;
+	}
+	
 	/* iterate through children of node 'Device' and get the necessary informations */
 	for (xmlNode *current = device->children; current; current = current->next) {
 		//printf("[DEBUG %s] start parsing of %s\n", __func__, current->name);

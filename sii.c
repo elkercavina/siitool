@@ -115,8 +115,11 @@ static struct _sii_preamble * parse_preamble(const unsigned char *buffer, size_t
 	if (size != count)
 		printf("%s: Warning counter differs from size\n", __func__);
 
-	if (crc != 0)
+	preamble->checksum_ok = 1;
+	if (crc != 0) {
+		preamble->checksum_ok = 0;
 		fprintf(stderr, "Error, checksum is not correct!\n");
+	}
 
 	return preamble;
 }
@@ -2033,7 +2036,7 @@ void sii_print(SiiInfo *sii)
 		printf("Sync Impulse Length: ........ %d ns (raw: 0x%.4x)\n", preamble->sync_impulse*10, preamble->sync_impulse);
 		printf("PDI Config 2: ............... 0x%.4x\n", preamble->pdi_conf2);
 		printf("Configured Station Alias: ... 0x%.4x\n", preamble->alias);
-		printf("Checksum of Preamble: ....... 0x%.4x\n", preamble->checksum);
+		printf("Checksum of Preamble: ....... 0x%.4x (%s)\n", preamble->checksum, (preamble->checksum_ok ? "ok" : "wrong"));
 	}
 
 	struct _sii_stdconfig *stdc = sii->config;
@@ -2048,7 +2051,7 @@ void sii_print(SiiInfo *sii)
 
 		/* mailbox settings */
 		printf("\nDefault mailbox settings:\n");
-		printf("  Boostrap Mailbox:\n");
+		printf("  Bootstrap Mailbox:\n");
 		printf("  Received Mailbox Offset: .. 0x%04x\n", stdc->bs_rec_mbox_offset);
 		printf("  Received Mailbox Size: .... %d\n", stdc->bs_rec_mbox_size);
 		printf("  Send Mailbox Offset: ...... 0x%04x\n", stdc->bs_snd_mbox_offset);

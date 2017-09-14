@@ -188,6 +188,7 @@ static uint16_t preamble_crc8(struct _sii_preamble *pa)
 	crc8byte(&crc, pa->reserved[3]&0xff);
 
 	pa->checksum = crc;
+	pa->checksum_ok = 1;
 
 	return pa->checksum;
 }
@@ -444,7 +445,7 @@ static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root)
 
 	parent = search_node(root, "Groups");
 	node = search_node(parent, "Group"); /* FIXME handle multiple groups??? */
-	tmp = search_node(node, "Name"); /* FIXME check language id and use the english version */
+	tmp = search_node(node, "Type");
 	general->groupindex = sii_strings_add(sii, (const char *)tmp->children->content);
 
 	general->imageindex = 0;

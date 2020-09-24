@@ -326,11 +326,13 @@ static struct _sii_stdconfig *parse_config(xmlNode *root, int ndev)
 
 	while (prop != NULL) {
 		if (xmlStrncmp(prop->name, Char2xmlChar("ProductCode"), xmlStrlen(prop->name)) == 0) {
-			sscanf((const char *)prop->children->content, "#x%x", &(sc->product_id));
+			if (prop->children->content[0]=='#') sscanf((const char *)prop->children->content, "#x%x", &(sc->product_id));
+			else sscanf((const char *)prop->children->content, "%d", &(sc->product_id));
 		}
 
 		if (xmlStrncmp(prop->name, Char2xmlChar("RevisionNo"), xmlStrlen(prop->name)) == 0) {
-			sscanf((const char *)prop->children->content, "#x%x", &(sc->revision_id));
+			if (prop->children->content[0]=='#') sscanf((const char *)prop->children->content, "#x%x", &(sc->revision_id));
+			else sscanf((const char *)prop->children->content, "%d", &(sc->revision_id));
 		}
 
 		prop = prop->next;

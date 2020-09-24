@@ -244,6 +244,8 @@ int main(int argc, char *argv[])
 	int ret = -1;
 	int ndev = 0;
 
+	printf("SIITOOL V1.01\n");
+		
 	for (int i=1; i<argc; i++) {
 		switch (argv[i][0]) {
 		case '-':
@@ -280,7 +282,7 @@ int main(int argc, char *argv[])
 			break;
 
 		default:
-			/* asuming file name */
+			/* assuming file name */
 			filename = argv[i];
 			break;
 		}
@@ -314,9 +316,8 @@ int main(int argc, char *argv[])
 	unsigned char *xml_start = eeprom;
 	switch (filetype) {
 	case ESIXML:
-#if DEBUG == 1
-		printf("Processing ESI/XML file\n");
-#endif
+		printf("Processing ESI/XML file '%s'\n", filename);
+		
 		/* Start XML processing at the first '<' character to avoid strange behavior when parsing. */
 		while (*xml_start != '<')
 			xml_start++;
@@ -325,9 +326,7 @@ int main(int argc, char *argv[])
 		break;
 
 	case SIIEEPROM:
-#if DEBUG == 1
-		printf("Processing SII/EEPROM file\n");
-#endif
+		printf("Processing SII/EEPROM file '%s'\n", filename);
 		ret = parse_sii_input(eeprom, output);
 		break;
 
